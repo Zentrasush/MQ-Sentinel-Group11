@@ -1,0 +1,50 @@
+#include <Arduino.h>
+
+const int MOTOR_SPEED_PIN = 5;      // D5 → EN/IN1
+const int MOTOR_DIRECTION_PIN = 4;  // D4 → PH/IN2
+
+const int TEST_SPEED = 128;         // PWM range: 0–255
+
+void stopMotor() {
+  analogWrite(MOTOR_SPEED_PIN, 0);
+}
+
+void rotateDirectionA() {
+  digitalWrite(MOTOR_DIRECTION_PIN, LOW);
+  analogWrite(MOTOR_SPEED_PIN, TEST_SPEED);
+}
+
+void rotateDirectionB() {
+  digitalWrite(MOTOR_DIRECTION_PIN, HIGH);
+  analogWrite(MOTOR_SPEED_PIN, TEST_SPEED);
+}
+
+void setup() {
+  pinMode(MOTOR_SPEED_PIN, OUTPUT);
+  pinMode(MOTOR_DIRECTION_PIN, OUTPUT);
+
+  stopMotor();
+
+  Serial.begin(9600);
+  Serial.println("Bidirectional motor test starts in 3 seconds");
+
+  delay(3000);
+}
+
+void loop() {
+  Serial.println("Direction A");
+  rotateDirectionA();
+  delay(2000);
+
+  Serial.println("Stopped");
+  stopMotor();
+  delay(2000);
+
+  Serial.println("Direction B");
+  rotateDirectionB();
+  delay(2000);
+
+  Serial.println("Stopped");
+  stopMotor();
+  delay(3000);
+}
