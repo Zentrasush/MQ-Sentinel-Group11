@@ -1,27 +1,27 @@
 #include <Arduino.h>
 
-const int MOTOR_SPEED_PIN = 5;      // D5 → EN/IN1
-const int MOTOR_DIRECTION_PIN = 4;  // D4 → PH/IN2
+const int SPEED_PIN = 5;      // D5 → EN/IN1
+const int DIRECTION_PIN = 4;  // D4 → PH/IN2
 
 const int TEST_SPEED = 128;         // PWM range: 0–255
 
 void stopMotor() {
-  analogWrite(MOTOR_SPEED_PIN, 0);
+  analogWrite(SPEED_PIN, 0);
 }
 
 void rotateDirectionA() {
-  digitalWrite(MOTOR_DIRECTION_PIN, LOW);
-  analogWrite(MOTOR_SPEED_PIN, TEST_SPEED);
+  digitalWrite(DIRECTION_PIN, LOW);
+  analogWrite(SPEED_PIN, TEST_SPEED);
 }
 
 void rotateDirectionB() {
-  digitalWrite(MOTOR_DIRECTION_PIN, HIGH);
-  analogWrite(MOTOR_SPEED_PIN, TEST_SPEED);
+  digitalWrite(DIRECTION_PIN, HIGH);
+  analogWrite(SPEED_PIN, TEST_SPEED);
 }
 
 void setup() {
-  pinMode(MOTOR_SPEED_PIN, OUTPUT);
-  pinMode(MOTOR_DIRECTION_PIN, OUTPUT);
+  pinMode(SPEED_PIN, OUTPUT);
+  pinMode(DIRECTION_PIN, OUTPUT);
 
   stopMotor();
 
