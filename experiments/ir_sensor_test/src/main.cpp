@@ -1,27 +1,39 @@
 #include <Arduino.h>
 
-const int IR_PIN = 2;
+const int IR_SENSOR_PIN = 2;
+const int LED_PIN = LED_BUILTIN;
 
-void setup()
-{
+unsigned long lastDetectionTime = 0;
+unsigned long lastMessageTime = 0;
+
+void setup() {
+    pinMode(IR_SENSOR_PIN, INPUT);
+    pinMode(LED_PIN, OUTPUT);
+
+    digitalWrite(LED_PIN, LOW);
+
     Serial.begin(9600);
-
-    // TSOP38238 normally outputs HIGH and produces LOW pulses when it receives a valid 38 kHz IR signal.
-    pinMode(IR_PIN, INPUT);
-
-    Serial.println("TSOP38238 IR sensor test started");
-    Serial.println("Press a button on the remote...");
+    Serial.println("TSOP38238 sensor test started");
+    Serial.println("Point a TV remote at the sensor and press a button.");
 }
 
-void loop()
-{
-    int sensorState = digitalRead(IR_PIN);
+void loop() {
+    // TSOP38238 is active-low:
+    // LOW means a compatible IR burst is being detected.
+    if (digitalRead(IR_SENSOR_PIN) == LOW) {
+        lastDetectionTime = millis();
 
-    if (sensorState == LOW)
-    {
-        Serial.println("IR signal detected!");
+        // Limit messages so the serial monitor remains readable.
+        if (millis() - lastMessageTime >= 200) {
+            Serial.println("IR detected");
+            lastMessageTime = millis();
+        }
+    }
 
-        // Prevent the Serial Monitor from being flooded.
-        delay(100);
+    // Keep the LED illuminated briefly after detection.
+    if (millis() - lastDetectionTime < 100) {
+        digitalWrite(LED_PIN, HIGH);
+    } else {
+        digitalWrite(LED_PIN, LOW);
     }
 }

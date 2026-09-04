@@ -5,6 +5,7 @@ const int IR_PIN = 2;    // D2 -> TSOP38238 OUT (Left)
 const int SPEED_PIN = 5;  // D5 -> DRV8874 EN/IN1
 const int DIRECTION_PIN = 4;    // D4 -> DRV8874 EN/IN2
 
+
 // Motor setting
 const int SEARCH_SPEED = 100;
 
