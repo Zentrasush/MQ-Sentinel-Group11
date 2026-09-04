@@ -1,0 +1,105 @@
+#include <Arduino.h>
+
+// --- Motor driver (DRV8874) pins - same as existing bidirectional_motor test ---
+const int SPEED_PIN = 5;      // D5 -> EN/IN1 (PWM)
+const int DIRECTION_PIN = 4;  // D4 -> PH/IN2
+
+// --- Encoder pins ---
+const int ENCODER_A = 2; // D2 - interrupt-capable
+const int ENCODER_B = 3; // D3 - read for direction decoding
+
+volatile long encoderTicks = 0; // signed tick count
+
+// Ticks per output-shaft revolution. This depends on the FIT0186's encoder
+// disc resolution AND the gearbox ratio - check the datasheet or count
+// manually (rotate the shaft exactly one turn by hand and print encoderTicks).
+// The value below is a PLACEHOLDER - do not trust it until calibrated.
+const float TICKS_PER_REV = 1200.0;
+
+// --- PI speed controller ---
+float targetRPM = 0;
+float currentRPM = 0;
+
+float Kp = 2.0;
+float Ki = 0.5;
+float integral = 0;
+
+unsigned long lastSampleTime = 0;
+const unsigned long SAMPLE_INTERVAL_MS = 50; // 20 Hz control loop
+long lastTickCount = 0;
+
+// Quadrature decode: on every A transition, compare A and B to work out
+// which way the shaft is turning.
+void encoderISR_A() {
+  bool a = digitalRead(ENCODER_A);
+  bool b = digitalRead(ENCODER_B);
+  if (a == b) {
+    encoderTicks++;
+  } else {
+    encoderTicks--;
+  }
+}
+
+void setup() {
+  pinMode(SPEED_PIN, OUTPUT);
+  pinMode(DIRECTION_PIN, OUTPUT);
+  pinMode(ENCODER_A, INPUT_PULLUP);
+  pinMode(ENCODER_B, INPUT_PULLUP);
+
+  attachInterrupt(digitalPinToInterrupt(ENCODER_A), encoderISR_A, CHANGE);
+
+  Serial.begin(9600);
+  Serial.println("Closed-loop motor control starting...");
+
+  lastSampleTime = millis();
+}
+
+// pwmSigned range: -255 to 255. Sign sets direction, magnitude sets speed.
+void setMotor(float pwmSigned) {
+  pwmSigned = constrain(pwmSigned, -255, 255);
+
+  if (pwmSigned >= 0) {
+    digitalWrite(DIRECTION_PIN, LOW);
+    analogWrite(SPEED_PIN, (int)pwmSigned);
+  } else {
+    digitalWrite(DIRECTION_PIN, HIGH);
+    analogWrite(SPEED_PIN, (int)(-pwmSigned));
+  }
+}
+
+void updateSpeedControl() {
+  unsigned long now = millis();
+  if (now - lastSampleTime < SAMPLE_INTERVAL_MS) return;
+
+  float dt = (now - lastSampleTime) / 1000.0;
+  lastSampleTime = now;
+
+  noInterrupts();
+  long ticksNow = encoderTicks;
+  interrupts();
+
+  long deltaTicks = ticksNow - lastTickCount;
+  lastTickCount = ticksNow;
+
+  // ticks per sample -> revolutions per sample -> RPM
+  currentRPM = (deltaTicks / TICKS_PER_REV) / (dt / 60.0);
+
+  float error = targetRPM - currentRPM;
+  integral += error * dt;
+  integral = constrain(integral, -200, 200); // anti-windup
+
+  float output = Kp * error + Ki * integral;
+  setMotor(output);
+
+  Serial.print("Target RPM: ");
+  Serial.print(targetRPM);
+  Serial.print("  Current RPM: ");
+  Serial.print(currentRPM);
+  Serial.print("  PWM out: ");
+  Serial.println(output);
+}
+
+void loop() {
+  targetRPM = 100; // replace with the value your alignment/control logic asks for
+  updateSpeedControl();
+}
