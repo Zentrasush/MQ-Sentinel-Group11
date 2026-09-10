@@ -3,8 +3,12 @@
 const int SPEED_PIN = 5;      // D5 → EN/IN1
 const int DIRECTION_PIN = 4;  // D4 → PH/IN2
 
-const int TEST_SPEED = 128;         // PWM range: 0–255
+const int TEST_SPEED = 128;         // PWM range: 0–255 so 50% PWM
+const unsigned long RUN_TIME = 2000;
+const unsigned long STOP_TIME = 1500;
 
+
+// Motor Functions
 void stopMotor() {
   analogWrite(SPEED_PIN, 0);
 }
@@ -19,6 +23,7 @@ void rotateDirectionB() {
   analogWrite(SPEED_PIN, TEST_SPEED);
 }
 
+
 void setup() {
   pinMode(SPEED_PIN, OUTPUT);
   pinMode(DIRECTION_PIN, OUTPUT);
@@ -26,25 +31,44 @@ void setup() {
   stopMotor();
 
   Serial.begin(9600);
-  Serial.println("Bidirectional motor test starts in 3 seconds");
+  Serial.println("Bidirectional motor validation test");
+  Serial.println("5 direction cycles will be performed");
 
-  delay(3000);
+  delay(2000);
 }
 
-void loop() {
-  Serial.println("Direction A");
+
+void loop()
+{
+  static int cycleNumber = 1;
+  if (cycleNumber > 5)
+  {
+    stopMotor();
+    Serial.println("Validation test completed.");
+    while (true)
+    {
+      // Test finished
+    }
+  }
+
+  Serial.print("Cycle ");
+  Serial.print(cycleNumber);
+  Serial.println(": Direction A");
   rotateDirectionA();
-  delay(2000);
-
-  Serial.println("Stopped");
+  delay(RUN_TIME);
   stopMotor();
-  delay(2000);
+  Serial.println("Motor stopped");
+  delay(STOP_TIME);
 
-  Serial.println("Direction B");
+
+  Serial.print("Cycle ");
+  Serial.print(cycleNumber);
+  Serial.println(": Direction B");
   rotateDirectionB();
-  delay(2000);
-
-  Serial.println("Stopped");
+  delay(RUN_TIME);
   stopMotor();
-  delay(3000);
+  Serial.println("Motor stopped");
+  delay(STOP_TIME);
+
+  cycleNumber++;
 }
