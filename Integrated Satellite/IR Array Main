@@ -1,8 +1,6 @@
 #include <Arduino.h>
 
-// 4 digital IR receiver modules (TSOP-style, output goes LOW when they
-// detect a 38kHz modulated IR beacon). Placed evenly around the sensor
-// ring: Front, Right, Back, Left.
+// Same pins as the final integrated code - test these independently first.
 const int IR_FRONT = 6;
 const int IR_RIGHT = 7;
 const int IR_BACK  = 8;
@@ -15,41 +13,25 @@ void setup() {
   pinMode(IR_LEFT, INPUT);
 
   Serial.begin(9600);
-  Serial.println("IR array test starting...");
-}
-
-// Returns an approximate angle in degrees (0 = front, clockwise),
-// or -1 if no active beacon is detected right now.
-int detectDirection() {
-  bool front = !digitalRead(IR_FRONT); // active LOW
-  bool right = !digitalRead(IR_RIGHT);
-  bool back  = !digitalRead(IR_BACK);
-  bool left  = !digitalRead(IR_LEFT);
-
-  // Two adjacent sensors both triggering means the target is between them
-  if (front && right) return 45;
-  if (right && back)  return 135;
-  if (back && left)   return 225;
-  if (left && front)  return 315;
-
-  // Single sensor triggering
-  if (front) return 0;
-  if (right) return 90;
-  if (back)  return 180;
-  if (left)  return 270;
-
-  return -1;
+  Serial.println("IR array test - point the transmitter at each sensor in turn");
 }
 
 void loop() {
-  int angle = detectDirection();
+  // Sensors are active LOW - reads HIGH normally, drops LOW when they see
+  // a 38kHz beacon.
+  bool front = digitalRead(IR_FRONT) == LOW;
+  bool right = digitalRead(IR_RIGHT) == LOW;
+  bool back  = digitalRead(IR_BACK)  == LOW;
+  bool left  = digitalRead(IR_LEFT)  == LOW;
 
-  if (angle >= 0) {
-    Serial.print("Target detected, approx angle: ");
-    Serial.println(angle);
-  } else {
-    Serial.println("No target detected");
-  }
+  Serial.print("FRONT: ");
+  Serial.print(front ? "DETECTED" : "-");
+  Serial.print("   RIGHT: ");
+  Serial.print(right ? "DETECTED" : "-");
+  Serial.print("   BACK: ");
+  Serial.print(back ? "DETECTED" : "-");
+  Serial.print("   LEFT: ");
+  Serial.println(left ? "DETECTED" : "-");
 
-  delay(100);
+  delay(200);
 }
