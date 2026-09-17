@@ -1,10 +1,6 @@
 #include <Arduino.h>
 
-// Laser is switched by an NPN transistor (base driven through a 1k
-// resistor from this pin) - NOT wired directly to the laser module.
-// See wiring notes.
 const int LASER_PIN = 10;
-
 const unsigned long DWELL_TIME_MS = 2000; // required hold time to score
 
 void setup() {
@@ -23,10 +19,6 @@ void stopLaser() {
   digitalWrite(LASER_PIN, LOW);
 }
 
-// Call this once alignment is confirmed on a target.
-// Returns true if the laser stayed on target for the full dwell time
-// without interruption (isOnTarget should return live sensor/alignment
-// status from your control loop).
 bool holdOnTarget(bool (*isOnTarget)()) {
   fireLaser();
   unsigned long start = millis();
@@ -45,7 +37,6 @@ bool holdOnTarget(bool (*isOnTarget)()) {
   return true;
 }
 
-// Placeholder - replace with real alignment check from your control logic
 bool dummyIsOnTarget() {
   return true;
 }
