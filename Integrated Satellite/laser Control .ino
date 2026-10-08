@@ -1,48 +1,106 @@
 #include <Arduino.h>
 
-const int LASER_PIN = 10;
-const unsigned long DWELL_TIME_MS = 2000; // required hold time to score
+// Pin Configuration - Same as Team's Main Code
+const int LASER_PIN = 12;      // D12 -> Transistor base (via 1k resistor)
+const int MAIN_SENSOR = 6;     // D6 -> TSOP38238 OUT
 
-void setup() {
-  pinMode(LASER_PIN, OUTPUT);
-  digitalWrite(LASER_PIN, LOW); // laser off at startup
+// Settings
+const unsigned long DWELL_TIME_MS = 3000;  // 3 seconds
+const unsigned long IR_HOLD_TIME = 250;    // IR burst gap tolerance
+const unsigned long TARGET_REMOVAL_TIME = 500;
 
-  Serial.begin(9600);
-  Serial.println("Laser control test starting...");
-}
+// Variables
+bool laserActive = false;
+bool targetSeen = false;
+bool waitingForRelease = false;
+bool timingRemoval = false;
 
+unsigned long laserStartTime = 0;
+unsigned long lastSeenTime = 0;
+unsigned long removalStartTime = 0;
+
+// Laser Functions
 void fireLaser() {
-  digitalWrite(LASER_PIN, HIGH);
+    digitalWrite(LASER_PIN, HIGH);
 }
 
 void stopLaser() {
-  digitalWrite(LASER_PIN, LOW);
+    digitalWrite(LASER_PIN, LOW);
 }
 
-bool holdOnTarget(bool (*isOnTarget)()) {
-  fireLaser();
-  unsigned long start = millis();
+// Setup
+void setup() {
+    pinMode(LASER_PIN, OUTPUT);
+    pinMode(MAIN_SENSOR, INPUT);
 
-  while (millis() - start < DWELL_TIME_MS) {
-    if (!isOnTarget()) {
-      stopLaser();
-      Serial.println("Lost target before dwell time completed");
-      return false;
-    }
-    delay(10);
-  }
+    stopLaser();
 
-  stopLaser();
-  Serial.println("Target held for full dwell time - scored");
-  return true;
+    Serial.begin(9600);
+    Serial.println("Laser Control System Ready");
 }
 
-bool dummyIsOnTarget() {
-  return true;
-}
-
+// Main Loop
 void loop() {
-  Serial.println("Firing test...");
-  holdOnTarget(dummyIsOnTarget);
-  delay(2000);
+    unsigned long now = millis();
+
+    // Detect IR signal (Active LOW)
+    if (digitalRead(MAIN_SENSOR) == LOW) {
+        targetSeen = true;
+        lastSeenTime = now;
+    }
+
+    bool isOnTarget =
+        targetSeen &&
+        (now - lastSeenTime <= IR_HOLD_TIME);
+
+    // Start Laser when target is detected
+    if (!laserActive && !waitingForRelease && isOnTarget) {
+        fireLaser();
+        laserActive = true;
+        laserStartTime = now;
+
+        Serial.println("Target detected - Laser ON");
+    }
+
+    // Monitor laser firing
+    if (laserActive) {
+
+        // Stop laser if target is lost
+        if (!isOnTarget) {
+            stopLaser();
+            laserActive = false;
+            waitingForRelease = true;
+            timingRemoval = false;
+
+            Serial.println("Target lost - Laser OFF");
+        }
+
+        // Stop laser after 3 seconds
+        else if (now - laserStartTime >= DWELL_TIME_MS) {
+            stopLaser();
+            laserActive = false;
+            waitingForRelease = true;
+            timingRemoval = false;
+
+            Serial.println("3 seconds completed - Laser OFF");
+        }
+    }
+
+    // Wait for target removal
+    if (waitingForRelease) {
+        if (isOnTarget) {
+            timingRemoval = false;
+        }
+        else if (!timingRemoval) {
+            timingRemoval = true;
+            removalStartTime = now;
+        }
+        else if (now - removalStartTime >= TARGET_REMOVAL_TIME) {
+            waitingForRelease = false;
+            timingRemoval = false;
+            targetSeen = false;
+
+            Serial.println("Ready for next target");
+        }
+    }
 }
