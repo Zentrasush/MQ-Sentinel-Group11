@@ -1,6 +1,6 @@
 #include <Arduino.h>
 
-// Pin Configuration - Same as Team's Main Code
+// Pin Configuration 
 const int LASER_PIN = 12;      // D12 -> Transistor base (via 1k resistor)
 const int MAIN_SENSOR = 6;     // D6 -> TSOP38238 OUT
 
