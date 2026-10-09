@@ -12,29 +12,41 @@ const int LASER_PIN = 12;           // D12 -> transistor base (via 1k resistor)
 // Settings
 const int TURN_LEFT = LOW;
 const int TURN_RIGHT = HIGH;
-const int MOTOR_SPEED = 80;                     // PWM range: 0-255, 31% PWM
+const int MOTOR_SPEED = 80;
+
+// Experimental stopping pulse
+const int STOPPING_SPEED = 60;
+const unsigned long STOPPING_TIME = 100;
+const unsigned long STOPPING_PAUSE_TIME = 200;
+const bool STOPPING_OPPOSITE_DIRECTION = true;
+
 const unsigned long SEARCH_TIME = 1500;
 const unsigned long REVERSE_PAUSE_TIME = 200;
 const unsigned long IR_HOLD_TIME = 250;
 const unsigned long CONFIRM_TIME = 150;
 
-// Samiha's Laser Control Settings
+// Samiha's laser control setting
 const unsigned long DWELL_TIME_MS = 3000;
 
 const unsigned long TARGET_REMOVAL_TIME = 500;
 
 
-// Sensor indices: 0 = main || 1 = left || 2 = right
-const int sensor[3] = {MAIN_SENSOR, LEFT_SENSOR, RIGHT_SENSOR};
+// Sensor indices: 0 = main, 1 = left, 2 = right
+const int sensor[3] = {
+    MAIN_SENSOR,
+    LEFT_SENSOR,
+    RIGHT_SENSOR
+};
+
 bool sensorSeen[3] = {false, false, false};
 unsigned long lastSeen[3] = {0, 0, 0};
 bool detected[3] = {false, false, false};
 
 
 // System States
-enum SystemState
-{
+enum SystemState {
     SEARCHING,
+    STOPPING,
     CONFIRMING,
     FIRING,
     WAITING_FOR_TARGET_REMOVAL
@@ -46,8 +58,15 @@ SystemState state = SEARCHING;
 // Variables
 int motorDirection = TURN_RIGHT;
 int pendingDirection = TURN_RIGHT;
+
 bool reversing = false;
 bool timingRemoval = false;
+bool stoppingPulseStarted = false;
+
+int stoppingDirection = TURN_LEFT;
+
+unsigned long stoppingStartTime = 0;
+unsigned long stoppingPulseStartTime = 0;
 unsigned long directionStartTime = 0;
 unsigned long reverseStartTime = 0;
 unsigned long confirmationStartTime = 0;
@@ -77,11 +96,13 @@ void stopLaser() {
 
 
 // Sensor signal check
+// Bug 1 fixed: sensorIndex avoids variable collision
 bool irDetected(int sensorIndex, unsigned long now) {
     if (digitalRead(sensor[sensorIndex]) == LOW) {
         sensorSeen[sensorIndex] = true;
         lastSeen[sensorIndex] = now;
     }
+
     return sensorSeen[sensorIndex] &&
            (now - lastSeen[sensorIndex] <= IR_HOLD_TIME);
 }
@@ -93,7 +114,40 @@ void beginSearching(unsigned long now) {
     timingRemoval = false;
     directionStartTime = now;
     state = SEARCHING;
+
     Serial.println("SEARCHING for meteors");
+}
+
+void beginConfirming(unsigned long now) {
+    stopMotor();
+    confirmationStartTime = now;
+    state = CONFIRMING;
+
+    Serial.println("CONFIRMING: stopping stage finished");
+}
+
+void beginStopping(unsigned long now) {
+    stopMotor();
+    stopLaser();
+
+    reversing = false;
+    stoppingPulseStarted = false;
+    stoppingStartTime = now;
+
+    stoppingDirection = motorDirection;
+
+    if (STOPPING_OPPOSITE_DIRECTION) {
+        stoppingDirection =
+            motorDirection == TURN_LEFT ? TURN_RIGHT : TURN_LEFT;
+    }
+
+    if (STOPPING_TIME == 0 || STOPPING_SPEED == 0) {
+        beginConfirming(now);
+    }
+    else {
+        state = STOPPING;
+        Serial.println("STOPPING: brake pause, then calibrated pulse");
+    }
 }
 
 void requestReverse(int direction, unsigned long now) {
@@ -120,14 +174,11 @@ void updateSearch(unsigned long now) {
 
     if (sideSensorGuidance) {
         wantedDirection = detected[1] ? TURN_LEFT : TURN_RIGHT;
-        // Keep rotating until only one side is detecting
         directionStartTime = now;
     }
     else if (now - directionStartTime >= SEARCH_TIME) {
-        // neither or both side detected
-        wantedDirection = motorDirection == TURN_LEFT
-                              ? TURN_RIGHT
-                              : TURN_LEFT;
+        wantedDirection =
+            motorDirection == TURN_LEFT ? TURN_RIGHT : TURN_LEFT;
     }
 
     if (wantedDirection != motorDirection) {
@@ -172,14 +223,30 @@ void loop() {
 
         case SEARCHING:
             if (detected[0]) {
-                stopMotor();
-                reversing = false;
-                confirmationStartTime = now;
-                state = CONFIRMING;
-                Serial.println("CONFIRMING: motor stopped");
+                beginStopping(now);
             }
             else {
                 updateSearch(now);
+            }
+            break;
+
+        case STOPPING:
+            // Laser remains OFF during stopping
+            stopLaser();
+
+            if (!stoppingPulseStarted) {
+                stopMotor();
+
+                if (now - stoppingStartTime >= STOPPING_PAUSE_TIME) {
+                    digitalWrite(DIRECTION_PIN, stoppingDirection);
+                    analogWrite(SPEED_PIN, STOPPING_SPEED);
+
+                    stoppingPulseStartTime = now;
+                    stoppingPulseStarted = true;
+                }
+            }
+            else if (now - stoppingPulseStartTime >= STOPPING_TIME) {
+                beginConfirming(now);
             }
             break;
 
@@ -190,10 +257,13 @@ void loop() {
                 Serial.println("Confirmation failed: target lost");
                 beginSearching(now);
             }
-            else if (now - confirmationStartTime >=
-                         (CONFIRM_TIME && mainLOW)) {
 
-                // Samiha's Laser Control
+            // Bug 2 fixed: correct 150 ms confirmation
+            else if (
+                (now - confirmationStartTime >= CONFIRM_TIME)
+                && mainLOW
+            ) {
+                // Samiha's laser implementation
                 fireLaser();
                 laserStartTime = now;
                 state = FIRING;
@@ -205,7 +275,8 @@ void loop() {
         case FIRING:
             stopMotor();
 
-            // Stop laser if target is lost
+            // Samiha's laser control:
+            // Turn OFF if target is lost
             if (!detected[0]) {
                 stopLaser();
 
@@ -216,7 +287,7 @@ void loop() {
                 beginSearching(now);
             }
 
-            // Stop laser after 3 seconds
+            // Turn OFF after 3 seconds
             else if (now - laserStartTime >= DWELL_TIME_MS) {
                 stopLaser();
 
